@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LexReach — Law Firm Business Development</title>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Georgia',serif;background:#f5f4f0;color:#1a1a1a;min-height:100vh}
+input,select,textarea,button{font-family:inherit}
+:root{
+  --navy:#0b1f3a;--gold:#b8832a;--gold2:#d4a04a;
+  --surf:#fff;--surf2:#f8f6f1;--bord:#e0dcd4;
+  --tx:#1a1a1a;--mut:#7a7060;--acc:#1a4f8a;
+}
+@media(prefers-color-scheme:dark){
+  body{background:#181c28}
+  :root{--surf:#1c2130;--surf2:#232838;--bord:#2e3448;--tx:#e6e2da;--mut:#8890a8;--navy:#0d1826}
+}
+.fade-in{animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin .8s linear infinite}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState, useCallback} = React;
+const R = '10px';
+
+const COUNTRIES = [
+  {code:'SG',name:'Singapore',flag:'🇸🇬',cities:['Singapore']},
+  {code:'GB',name:'United Kingdom',flag:'🇬🇧',cities:['London','Manchester','Birmingham','Edinburgh','Leeds','Bristol','Glasgow']},
+  {code:'US',name:'United States',flag:'🇺🇸',cities:['New York','Los Angeles','Chicago','Houston','Washington DC','Boston','San Francisco','Miami','Atlanta','Dallas']},
+  {code:'AU',name:'Australia',flag:'🇦🇺',cities:['Sydney','Melbourne','Brisbane','Perth','Adelaide']},
+  {code:'HK',name:'Hong Kong',flag:'🇭🇰',cities:['Central','Admiralty','Wan Chai','Causeway Bay']},
+  {code:'MY',name:'Malaysia',flag:'🇲🇾',cities:['Kuala Lumpur','Penang','Johor Bahru']},
+  {code:'AE',name:'UAE',flag:'🇦🇪',cities:['Dubai','Abu Dhabi','Sharjah']},
+  {code:'CA',name:'Canada',flag:'🇨🇦',cities:['Toronto','Vancouver','Montreal','Calgary','Ottawa']},
+  {code:'IN',name:'India',flag:'🇮🇳',cities:['Mumbai','Delhi','Bangalore','Chennai','Hyderabad']},
+  {code:'DE',name:'Germany',flag:'🇩🇪',cities:['Frankfurt','Munich','Berlin','Hamburg','Düsseldorf']},
+  {code:'JP',name:'Japan',flag:'🇯🇵',cities:['Tokyo','Osaka','Nagoya']},
+  {code:'FR',name:'France',flag:'🇫🇷',cities:['Paris','Lyon','Marseille']},
+  {code:'NL',name:'Netherlands',flag:'🇳🇱',cities:['Amsterdam','Rotterdam','The Hague']},
+  {code:'CH',name:'Switzerland',flag:'🇨🇭',cities:['Zurich','Geneva','Basel']},
+];
+
+const PRACTICE_AREAS = [
+  'All Practice Areas','Corporate & M&A','Litigation & Dispute Resolution',
+  'Employment & Labour','Intellectual Property','Real Estate','Banking & Finance',
+  'Tax','Restructuring & Insolvency','Arbitration','Competition & Antitrust',
+  'Data Privacy & Cybersecurity','Projects & Infrastructure','Insurance',
+];
+
+const STATUS_META = {
+  'Not contacted': {bg:'#f1f0ec',tx:'#6b6860',bord:'#d4d1c7',icon:'ti-circle'},
+  'Email sent':    {bg:'#e3f0fb',tx:'#1a5fb4',bord:'#b5d4f4',icon:'ti-send'},
+  'Replied':       {bg:'#eaf3de',tx:'#3b6d11',bord:'#c0dd97',icon:'ti-message-dots'},
+  'Follow-up needed': {bg:'#faeeda',tx:'#854f0b',bord:'#fac775',icon:'ti-bell'},
+  'Meeting booked':{bg:'#eeedfe',tx:'#3c3489',bord:'#afa9ec',icon:'ti-calendar-check'},
+  'Not interested':{bg:'#fcebeb',tx:'#791f1f',bord:'#f7c1c1',icon:'ti-x'},
+};
+
+const DEFAULT_TEMPLATE = `Dear {partner},
+
+I hope this message finds you well. My name is {senderName}, {senderTitle} at {senderCompany} — a specialist legal recruitment firm with deep expertise placing top-tier legal talent across {city} and the wider {country} market.
+
+We work exclusively with law firms to identify and place qualified associates, senior associates, and partners across all practice areas. Our approach is discreet, thorough, and tailored to each firm's culture and requirements.
+
+Given {firm}'s strong reputation in {practiceArea}, I believe we may be well-positioned to support your talent acquisition needs — whether for immediate vacancies or to build a long-term hiring pipeline.
+
+I would welcome the opportunity to speak briefly about how we might add value. Would you be open to a short introductory call at your convenience?
+
+Warm regards,
+{senderName}
+{senderTitle} | {senderCompany}
+{senderEmail} | {senderPhone}`;
+
+function fillTemplate(tpl, data) {
+  return tpl
+    .replace(/{partner}/g,       data.partner       || '')
+    .replace(/{firm}/g,          data.firm          || '')
+    .replace(/{practiceArea}/g,  data.practiceArea  || '')
+    .replace(/{city}/g,          data.city          || '')
+    .replace(/{country}/g,       data.country       || '')
+    .replace(/{senderName}/g,    data.senderName    || '[Your Name]')
+    .replace(/{senderTitle}/g,   data.senderTitle   || '[Your Title]')
+    .replace(/{senderCompany}/g, data.senderCompany || '[Your Company]')
+    .replace(/{senderEmail}/g,   data.senderEmail   || '[Your Email]')
+    .replace(/{senderPhone}/g,   data.senderPhone   || '[Your Phone]');
+}
+
+/* ── Simulated firm generator ── */
+const FIRM_PREFIXES = [
+  'Allen & Overy','Baker McKenzie','Clifford Chance','Dentons','Eversheds Sutherland',
+  'Freshfields','Gibson Dunn','Herbert Smith Freehills','Jones Day','King & Wood Mallesons',
+  'Linklaters','Mayer Brown','Norton Rose Fulbright','Osborne Clarke','Paul Weiss',
+  'Quinn Emanuel','Reed Smith','Sidley Austin','Trowers & Hamlins','White & Case',
+  'Withers','Ashurst','Bird & Bird','CMS','DLA Piper','Hogan Lovells','Latham & Watkins',
+  'Morrison Foerster','Orrick','Skadden Arps',
+];
+const PARTNERS = [
+  'James Whitfield','Sarah Chen','Michael Okafor','Priya Sharma','David Lim',
+  'Caroline Müller','Robert Tan','Elena Kovacs','Thomas Nguyen','Fiona MacDonald',
+  'Omar Al-Hassan','Jessica Park','Andrew Blackwell','Mei-Lin Wong','Patrick Dubois',
+  'Rajan Mehta','Claire Fontaine','William Osei','Natasha Ivanova','Samuel Adeyemi',
+];
+const AREAS = [
+  'Corporate & M&A','Litigation & Dispute Resolution','Employment & Labour',
+  'Intellectual Property','Banking & Finance','Arbitration','Real Estate','Tax',
+];
+const SIZES = ['Boutique','Mid-size','Large','Magic Circle','Silver Circle'];
+const DESCS = [
+  'Specialists in cross-border transactions and regulatory compliance.',
+  'Renowned for complex commercial litigation and dispute resolution.',
+  'Leading practice in employment law and workplace investigations.',
+  'Experts in technology, media, and intellectual property matters.',
+  'Focused on structured finance and capital markets transactions.',
+  'Highly regarded for international arbitration and ADR proceedings.',
+  'Prominent real estate and infrastructure practice.',
+  'Full-service firm with deep roots in the local legal market.',
+];
+
+function generateFirms(country, city, practiceArea, count) {
+  const seed = (country + city).split('').reduce((a,c) => a + c.charCodeAt(0), 0);
+  const pick = (arr, offset) => arr[(seed + offset) % arr.length];
+  return Array.from({length: count}, (_, i) => {
+    const firmBase = pick(FIRM_PREFIXES, i * 3);
+    const firm = i % 4 === 0 ? firmBase : firmBase + ' ' + city;
+    const partner = pick(PARTNERS, i * 7);
+    const area = practiceArea === 'All Practice Areas' ? pick(AREAS, i * 5) : practiceArea;
+    const domain = firmBase.toLowerCase().replace(/[^a-z]/g,'').slice(0,12) + '.com';
+    const emailSlug = partner.toLowerCase().replace(/ /,'.');
+    return {
+      id: `${country}-${city}-${i}`,
+      firm,
+      partner,
+      title: 'Managing Partner',
+      email: `${emailSlug}@${domain}`,
+      website: `https://www.${domain}`,
+      practiceArea: area,
+      size: pick(SIZES, i * 2),
+      description: pick(DESCS, i * 4),
+      city, country,
+      status: 'Not contacted',
+      notes: '',
+      emailSentDate: null,
+      selected: false,
+    };
+  });
+}
+
+/* ── Small components ── */
+function Avatar({name, size=36}) {
+  const letters = (name||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  const cols = ['#0b2a4a','#1a4f8a','#2c6e35','#7a4a0a','#4a2a7a','#0f6e56','#8a2020'];
+  return (
+    <div style={{width:size,height:size,borderRadius:'50%',background:cols[(name||'').charCodeAt(0)%cols.length],display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:size*.35,fontWeight:600,flexShrink:0,fontFamily:'sans-serif'}}>
+      {letters}
+    </div>
+  );
+}
+
+function Badge({status}) {
+  const m = STATUS_META[status] || STATUS_META['Not contacted'];
+  return (
+    <span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,fontWeight:500,padding:'3px 9px',borderRadius:20,background:m.bg,color:m.tx,border:'0.5px solid '+m.bord,whiteSpace:'nowrap',fontFamily:'sans-serif'}}>
+      <i className={'ti '+m.icon} style={{fontSize:11}}></i>{status}
+    </span>
+  );
+}
+
+function Toast({msg, type, onDone}) {
+  React.useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, []);
+  return (
+    <div style={{position:'fixed',bottom:20,right:20,zIndex:9999,background:type==='warn'?'#7a4a0a':'#0b2a4a',color:'#fff',padding:'10px 18px',borderRadius:8,fontSize:13,display:'flex',alignItems:'center',gap:8,fontFamily:'sans-serif',boxShadow:'0 4px 16px rgba(0,0,0,.25)'}}>
+      <i className={'ti '+(type==='warn'?'ti-bell':'ti-check')} style={{fontSize:15}}></i>{msg}
+    </div>
+  );
+}
+
+/* ── App ── */
+function App() {
+  const [tab, setTab]           = useState('search');
+  const [params, setParams]     = useState({country:'SG', city:'Singapore', practiceArea:'All Practice Areas', count:8});
+  const [firms, setFirms]       = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [sender, setSender]     = useState({name:'',title:'',company:'',email:'',phone:''});
+  const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
+  const [tracker, setTracker]   = useState([]);
+  const [toast, setToast]       = useState(null);
+  const [previewModal, setPreviewModal] = useState(null);
+  const [notesModal, setNotesModal]     = useState(null);
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [searchQ, setSearchQ]           = useState('');
+  const [sendingAll, setSendingAll]     = useState(false);
+
+  const showToast = (msg, type='ok') => setToast({msg, type});
+  const countryObj = COUNTRIES.find(c => c.code === params.country) || COUNTRIES[0];
+
+  const doSearch = () => {
+    setLoading(true);
+    setTimeout(() => {
+      const results = generateFirms(params.country, params.city, params.practiceArea, params.count);
+      setFirms(results);
+      setTab('results');
+      setLoading(false);
+    }, 900);
+  };
+
+  const toggleSelect = id => setFirms(p => p.map(f => f.id===id ? {...f, selected:!f.selected} : f));
+  const toggleAll    = ()  => { const any = firms.some(f => f.selected); setFirms(p => p.map(f => ({...f, selected:!any}))); };
+  const selected     = firms.filter(f => f.selected);
+
+  const previewEmail = firm => fillTemplate(template, {
+    ...firm,
+    senderName:    sender.name,
+    senderTitle:   sender.title,
+    senderCompany: sender.company,
+    senderEmail:   sender.email,
+    senderPhone:   sender.phone,
+  });
+
+  const markSent = useCallback(ids => {
+    const now = new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
+    setFirms(p => p.map(f => ids.includes(f.id) ? {...f, status:'Email sent', emailSentDate:now, selected:false} : f));
+    const entries = firms.filter(f => ids.includes(f.id)).map(f => ({...f, status:'Email sent', emailSentDate:now}));
+    setTracker(p => {
+      const updated = p.map(e => entries.find(n => n.id===e.id) || e);
+      const fresh   = entries.filter(n => !p.find(e => e.id===n.id));
+      return [...updated, ...fresh];
+    });
+    showToast(entries.length + ' email' + (entries.length!==1?'s':'') + ' marked as sent');
+    setTab('tracker');
+  }, [firms]);
+
+  const sendAll = () => {
+    setSendingAll(true);
+    setTimeout(() => { markSent(selected.map(f => f.id)); setSendingAll(false); }, 400);
+  };
+
+  const updateField = (id, field, val) => {
+    setTracker(p => p.map(e => e.id===id ? {...e, [field]:val} : e));
+    setFirms(p   => p.map(f => f.id===id ? {...f, [field]:val} : f));
+  };
+
+  const filteredTracker = tracker.filter(f => {
+    const ms = filterStatus==='All' || f.status===filterStatus;
+    const mq = !searchQ || [f.firm,f.partner,f.email].some(v => (v||'').toLowerCase().includes(searchQ.toLowerCase()));
+    return ms && mq;
+  });
+
+  const stats = {
+    total:    tracker.length,
+    sent:     tracker.filter(f => f.status==='Email sent').length,
+    replied:  tracker.filter(f => f.status==='Replied').length,
+    meetings: tracker.filter(f => f.status==='Meeting booked').length,
+  };
+
+  const NAV = [
+    ['search',  'ti-telescope',       'Search'],
+    ['results', 'ti-list-details',    'Firms'],
+    ['compose', 'ti-mail-forward',    'Compose'],
+    ['tracker', 'ti-layout-dashboard','Tracker'],
+  ];
+
+  return (
+    <div style={{minHeight:'100vh', background:'var(--surf2)'}}>
+
+      {/* ── HEADER ── */}
+      <div style={{background:'var(--navy)',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:100}}>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <div style={{width:34,height:34,borderRadius:8,background:'var(--gold)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <i className="ti ti-scale" style={{color:'#fff',fontSize:19}}></i>
+          </div>
+          <div>
+            <div style={{color:'#fff',fontWeight:700,fontSize:15,fontFamily:'Georgia,serif'}}>LexReach</div>
+            <div style={{color:'rgba(255,255,255,0.4)',fontSize:10,fontFamily:'sans-serif'}}>Legal Recruitment Business Development</div>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:2}}>
+          {NAV.map(([v,ic,lb]) => (
+            <button key={v} onClick={() => setTab(v)} style={{background:tab===v?'rgba(255,255,255,0.14)':'transparent',border:'none',color:tab===v?'#fff':'rgba(255,255,255,0.5)',padding:'6px 12px',borderRadius:6,cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',gap:5,fontFamily:'sans-serif'}}>
+              <i className={'ti '+ic} style={{fontSize:15}}></i>{lb}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+
+      <div style={{maxWidth:960,margin:'0 auto',padding:'22px 16px'}}>
+
+        {/* ── SEARCH ── */}
+        {tab==='search' && (
+          <div className="fade-in">
+            <div style={{textAlign:'center',marginBottom:28}}>
+              <div style={{fontSize:26,fontWeight:700,fontFamily:'Georgia,serif',marginBottom:6}}>Find law firm contacts</div>
+              <div style={{fontSize:14,color:'var(--mut)',fontFamily:'sans-serif'}}>Search by country, city and practice area to find managing partner contacts</div>
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,maxWidth:720,margin:'0 auto'}}>
+
+              {/* Search params */}
+              <div style={{background:'var(--surf)',borderRadius:R,border:'0.5px solid var(--bord)',padding:24,gridColumn:'1/-1'}}>
+                <div style={{fontSize:11,fontWeight:600,color:'var(--mut)',marginBottom:14,fontFamily:'sans-serif',letterSpacing:'.5px'}}>SEARCH PARAMETERS</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                  <div>
+                    <label style={{display:'block',fontSize:12,color:'var(--mut)',marginBottom:5,fontFamily:'sans-serif'}}>Country</label>
+                    <select value={params.country} onChange={e => { const c=COUNTRIES.find(x=>x.code===e.target.value); setParams(p=>({...p,country:e.target.value,city:c?.cities[0]||''})); }} style={{width:'100%',padding:'9px 10px',borderRadius:7,border:'0.5px solid var(--bord)',fontSize:13,background:'var(--surf)',color:'var(--tx)',fontFamily:'sans-serif'}}>
+                      {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.flag} {c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{display:'block',fontSize:12,color:'var(--mut)',marginBottom:5,fontFamily:'sans-serif'}}>City</label>
+                    <select value={params.city} onChange={e => setParams(p=>({...p,city:e.target.value}))} style={{width:'100%',padding:'9px 10px',borderRadius:7,border:'0.5px solid var(--bord)',fontSize:13,background:'var(--surf)',color:'var(--tx)',fontFamily:'sans-serif'}}>
+                      {(COUNTRIES.find(c=>c.code===params.country)?.cities||[]).map(c => <option key={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{display:'block',fontSize:12,color:'var(--mut)',marginBottom:5,fontFamily:'sans-serif'}}>Practice Area</label>
+                    <select value={params.practiceArea} onChange={e => setParams(p=>({...p,practiceArea:e.target.value}))} style={{width:'100%',padding:'9px 10px',borderRadius:7,border:'0.5px solid var(--bord)',fontSize:13,background:'var(--surf)',color:'var(--tx)',fontFamily:'sans-serif'}}>
+                      {PRACTICE_AREAS.map(p => <option key={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{display:'block',fontSize:12,color:'var(--mut)',marginBottom:5,fontFamily:'sans-serif'}}>Number of Firms</label>
+                    <select value={params.count} onChange={e => setParams(p=>({...p,count:+e.target.value}))} style={{width:'100%',padding:'9px 10px',borderRadius:7,border:'0.5px solid var(--bord)',fontSize:13,background:'var(--surf)',color:'var(--tx)',fontFamily:'sans-serif'}}>
+                      {[5,8,10,12,15,20].map(n => <option key={n} value={n}>{n} firms</option>)}
+                    </select>
+                  </div>
+                </div>
+                <button onClick={doSearch} disabled={loading} style={{marginTop:16,width:'100%',padding:'12px',background:'var(--navy)',color:'#fff',border:'none',borderRadius:8,fontSize:14,fontWeight:500,cursor:loading?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8,fontFamily:'sans-serif',opacity:loading?.65:1}}>
+                  {loading ? (<><i className="ti ti-loader-2 spin" style={{fontSize:16}}></i>Searching...</>) : (<><i className="ti ti-search" style={{fontSize:16}}></i>Search law firms</>)}
+                </button>
+              </div>
+
+              {/* Sender details */}
+              <div style={{background:'var(--surf)',borderRadius:R,border:'0.5px solid var(--bord)',padding:22}}>
+                <div style={{fontSize:11,fontWeight:600,color:'var(--mut)',marginBottom:12,fontFamily:'sans-serif',letterSpacing:'.5px'}}>YOUR SENDER DETAILS</div>
+                {[['name','Full name'],['title','Job title'],['company','Company name'],['email','Email address'],['phone','Phone number']].map(([k,ph]) => (
+                  <input key={k} placeholder={ph} value={sender[k]} onChange={e => setSender(p=>({...p,[k]:e.target.value}))} style={{width:'100%',padding:'8px 10px',borderRadius:7,border:'0.5px solid var(--bord)',fontSize:12,background:'var(--surf)',color:'var(--tx)',fontFamily:'sans-serif',marginBottom:8}} />
+                ))}
+              </div>
+
+              {/* Email template */}
+              <div style={{background:'var(--surf)',borderRadius:R,border:'0.5px solid var(--bord)',padding:22}}>
+                <div style={{fontSize:11,fontWeight:600,color:'var(--mut)',marginBottom:8,fontFamily:'sans-serif',letterSpacing:'.5px'}}>EMAIL TEMPLATE</div>
+                <div style={{fontSize:11,color:'var(--mut)',marginBottom:8,fontFamily:'sans-serif',lineHeight:1.5}}>
+                  Placeholders: <code style={{background:'var(--surf2)',padding:'1px 4px',borderRadius:3,fontSize:10}}>{'{partner}'}</code> <code style={{background:'var(--surf2)',padding:'1px 4px',borderRadius:3,fontSize:10}}>{'{firm}'}</code> <code style={{background:'var(--surf2)',padding:'1px 4px',borderRadius:3,fontSize:10}}>{'{practiceArea}'}</code> <code style={{background:'var(--surf2)',padding:'1px 4px',borderRadius:3,fontSize:10}}>{'{city}'}</code> <code style={{background:'var(--surf2)',padding:'1px 4px',borderRadius:3,fontSize:10}}>{'{country}'}</code>
+                </div>
+                <textarea value={template} onChange={e => setTemplate(e.target.value)} style={{width:'100%',height:220,padding:'8px 10px',borderRadius:7,border:'0.5px solid var(--bord)',fontSize:11,lineHeight:1.6,resize:'vertical',fontFamily:'monospace',background:'var(--surf)',color:'var(--tx)'}} />
+                <button onClick={() => setTemplate(DEFAULT_TEMPLATE)} style={{marginTop:4,fontSize:11,color:'var(--mut)',background:'transparent',border:'none',cursor:'pointer',fontFamily:'sans-serif',textDecoration:'underline'}}>Reset to default</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── RESULTS ── */}
+        {tab==='results' && (
+          <div className="fade-in">
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:10}}>
+              <div>
+                <div style={{fontSize:19,fontWeight:700,fontFamily:'Georgia,serif'}}>{firms.length} firms found</div>
+                <div style={{fontSize:12,color:'var(--mut)',fontFamily:'sans-serif'}}>{params.city}, {countryObj.name} · {params.practiceArea} · {selected.length} selected</div>
+              </div>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                <button onClick={toggleAll} style={{padding:'7px 13px',borderRadius:7,border:'0.5px solid var(--bord)',background:'var(--surf)',fontSize:12,cursor:'pointer',fontFamily:'sans-serif',color:'var(--tx)',display:'flex',alignItems:'center',gap:5}}>
+                  <i className="ti ti-checkbox" style={{fontSize:14}}></i>{firms.some(f=>f.selected)?'Deselect all':'Select all'}
+                </button>
+                <button onClick={() => { if(!selected.length){ showToast('Select firms first','warn'); return; } setTab('compose'); }} style={{padding:'7px 13px',borderRadius:7,border:'none',background:'var(--navy)',color:'#fff',fontSize:12,cursor:'pointer',fontFamily:'sans-serif',display:'flex',alignItems:'center',gap:5}}>
+                  <i className="ti ti-mail-forward" style={{fontSize:14}}></i>Compose ({selected.length})
+                </button>
+                <button onClick={doSearch} disabled={loading} style={{padding:'7px 13px',borderRadius:7,border:'0.5px solid var(--bord)',background:'var(--surf)',fontSize:12,cursor:'pointer',fontFamily:'sans-serif',color:'var(--tx)',display:'flex',alignItems:'center',gap:5,opacity:loading?.6:1}}>
+                  <i className={'ti ti-refresh'+(loading?' spin':'')} style={{fontSize:14}}></i>Re-search
+                </button>
+              </div>
+            </div>
+
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {firms.map(firm => (
+                <div key={firm.id} style={{background:'var(--surf)',borderRadius:R,border:'0.5px solid '+(firm.selected?'#1a5fb4':'var(--bord)'),padding:'12px 14px',display:'flex',alignItems:'center',gap:12,outline:firm.selected?'2px solid rgba(26,95,180,.1)':'none'}}>
+                  <input type="checkbox" checked={firm.selected} onChange={() => toggleSelect(firm.id)} style={{width:15,height:15,accentColor:'#1a4f8a',flexShrink:0}} />
+                  <Avatar name={firm.partner} />
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:13,marginBottom:2,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',fontFamily:'Georgia,serif'}}>
+                      {firm.firm}
+                      <span style={{fontSize:10,color:'var(--mut)',background:'var(--surf2)',padding:'1px 7px',borderRadius:20,border:'0.5px solid var(--bord)',fontFamily:'sans-serif'}}>{firm.size}</span>
+                    </div>
+                    <div style={{fontSize:12,color:'var(--mut)',marginBottom:2,fontFamily:'sans-serif'}}>{firm.partner} · {firm.title}</div>
+                    <div style={{fontSize:11,color:'var(--mut)',fontStyle:'italic',marginBottom:3,fontFamily:'Georgia,serif'}}>{firm.description}</div>
+                    <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+                      <span style={{fontSize:11,color:'var(--acc)',display:'flex',alignItems:'center',gap:3,fontFamily:'sans-serif'}}><i className="ti ti-mail" style={{fontSize:11}}></i>{firm.email}</span>
+                      <span style={{fontSize:11,color:'var(--mut)',display:'flex',alignItems:'center',gap:3,fontFamily:'sans-serif'}}><i className="ti ti-briefcase" style={{fontSize:11}}></i>{firm.practiceArea}</span>
+                    </div>
+                  </div>
+                  <div style={{display:'flex',flexDirection:'column',gap:6,alignItems:'flex-end',flexShrink:0}}>
+                    <Badge status={firm.status} />
+                    <button onClick={() => setPreviewModal(firm)} style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid var(--bord)',background:'transparent',cursor:'pointer',fontSize:11,color:'var(--mut)',fontFamily:'sans-serif',display:'flex',alignItems:'center',gap:3}}>
+                      <i className="ti ti-eye" style={{fontSize:11}}></i>Preview
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── COMPOSE ── */}
+        {tab==='compose' && (
+          <div className="fade-in">
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
+              <button onClick={() => setTab('results')} style={{padding:'5px 10px',borderRadius:7,border:'0.5px solid var(--bord)',background:'var(--surf)',cursor:'pointer',fontSize:12,fontFamily:'sans-serif',color:'var(--tx)',display:'flex',alignItems:'center',gap:4}}>
+                <i className="ti ti-arrow-left"></i>Back
+              </button>
+              <div>
+                <div style={{fontSize:18,fontWeight:700,fontFamily:'Georgia,serif'}}>Compose outreach</div>
+                <div style={{fontSize:12,color:'var(--mut)',fontFamily:'sans-serif'}}>{selected.length} recipient{selected.length!==1?'s':''} selected</div>
+              </div>
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'260px 1fr',gap:16}}>
+              {/* Recipients list */}
+              <div style={{background:'var(--surf)',borderRadius:R,border:'0.5px solid var(--bord)',padding:16}}>
+                <div style={{fontSize:11,fontWeight:600,color:'var(--mut)',marginBottom:10,fontFamily:'sans-serif',letterSpacing:'.5px'}}>RECIPIENTS ({selected.length})</div>
+                <div style={{display:'flex',flexDirection:'column',gap:6,maxHeight:380,overflow:'auto'}}>
+                  {selected.map(f => (
+                    <div key={f.id} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 8px',background:'var(--surf2)',borderRadius:7}}>
+                      <Avatar name={f.partner} size={26} />
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'Georgia,serif'}}>{f.firm}</div>
+                        <div style={{fontSize:10,color:'var(--mut)',fontFamily:'sans-serif'}}>{f.partner}</div>
+                      </div>
+                      <button onClick={() => toggleSelect(f.id)} style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--mut)',fontSize:16,padding:2,lineHeight:1}}>×</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Template editor */}
+              <div style={{background:'var(--surf)',borderRadius:R,border:'0.5px solid var(--bord)',padding:20}}>
+                <div style={{fontSize:11,fontWeight:600,color:'var(--mut)',marginBottom:10,fontFamily:'sans-serif',letterSpacing:'.5px'}}>EMAIL TEMPLATE</div>
+                <div style={{marginBottom:10}}>
+                  <label style={{fontSize:11,color:'var(--mut)',fontFamily:'sans-serif',display:'block',marginBottom:4}}>Subject line</label>
+                  <input defaultValue="Legal Recruitment Partnership — {firm}" style={{width:'100%',padding:'8px 10px',borderRadius:7,border:'0.5px solid var(--bord)',fontSize:12,background:'var(--surf)',color:'var(--tx)',fontFamily:'sans-serif'}} />
+                </div>
+                <textarea value={template} onChange={e => setTemplate(e.target.value)} style={{width:'100%',height:300,padding:'10px',borderRadius:7,border:'0.5px solid var(--bord)',fontSize:12,lineHeight:1.7,resize:'vertical',fontFamily:'monospace',background:'var(--surf)',color:'var(--tx)'}} />
+                <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
+                  <button onClick={() => selected.length && setPreviewModal(selected[0])} disabled={!selected.length} style={{padding:'8px 14px',borderRadius:7,border:'0.5px solid var(--bord)',background:'var(--surf)',fontSize:13,cursor:'pointer',fontFamily:'sans-serif',color:'var(--tx)',display:'flex',alignItems:'center',gap:5}}>
+                    <i className="ti ti-eye"></i>Preview first
+                  </button>
+                  <button onClick={sendAll} disabled={sendingAll||!selected.length} style={{padding:'8px 18px',borderRadius:7,border:'none',background:'var(--navy)',color:'#fff',fontSize:13,fontWeight:500,cursor:'pointer',fontFamily:'sans-serif',display:'flex',alignItems:'center',gap:5,opacity:(sendingAll||!selected.length)?.6:1}}>
+                    {sendingAll ? (<><i className="ti ti-loader-2 spin"></i>Processing...</>) : (<><i className="ti ti-send"></i>Mark {selected.length} as sent</>)}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── TRACKER ── */}
+        {tab==='tracker' && (
+          <div className="fade-in">
+            {/* Stats */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:20}}>
+              {[['Total tracked',stats.total,'ti-users','#0b2a4a'],['Emails sent',stats.sent,'ti-send','#1a5fb4'],['Replied',stats.replied,'ti-message-dots','#2c6e35'],['Meetings',stats.meetings,'ti-calendar-check','#4a2a7a']].map(([lb,val,ic,col]) => (
+                <div key={lb} style={{background:'var(--surf)',borderRadius:R,border:'0.5px solid var(--bord)',padding:'12px 14px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+                    <i className={'ti '+ic} style={{fontSize:15,color:col}}></i>
+                    <span style={{fontSize:11,color:'var(--mut)',fontFamily:'sans-serif'}}>{lb}</span>
+                  </div>
+                  <div style={{fontSize:22,fontWeight:700,fontFamily:'Georgia,serif'}}>{val}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Filters */}
+            <div style={{display:'flex',gap:10,marginBottom:14,flexWrap:'wrap'}}>
+              <input placeholder="Search firms, partners, emails..." value={searchQ} onChange={e => setSearchQ(e.target.value)} style={{flex:1,minWidth:200,padding:'8px 12px',borderRadius:8,border:'0.5px solid var(--bord)',fontSize:13,background:'var(--surf)',color:'var(--tx)',fontFamily:'sans-serif'}} />
+              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{padding:'8px 12px',borderRadius:8,border:'0.5px solid var(--bord)',fontSize:13,background:'var(--surf)',color:'var(--tx)',fontFamily:'sans-serif'}}>
+                <option value="All">All statuses</option>
+                {Object.keys(STATUS_META).map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+
+            {filteredTracker.length===0 ? (
+              <div style={{textAlign:'center',padding:'52px 20px',color:'var(--mut)'}}>
+                <i className="ti ti-inbox" style={{fontSize:40,display:'block',marginBottom:10}}></i>
+                <p style={{fontSize:14,fontFamily:'Georgia,serif',marginBottom:10}}>No tracked firms yet. Search for firms and send emails to start tracking.</p>
+                <button onClick={() => setTab('search')} style={{padding:'7px 14px',borderRadius:7,border:'0.5px solid var(--bord)',background:'var(--surf)',cursor:'pointer',fontSize:12,fontFamily:'sans-serif',color:'var(--tx)'}}>Start searching</button>
+              </div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {filteredTracker.map(firm => (
+                  <div key={firm.id} style={{background:'var(--surf)',borderRadius:R,border:'0.5px solid var(--bord)',padding:'13px 15px',display:'flex',alignItems:'flex-start',gap:12,flexWrap:'wrap'}}>
+                    <Avatar name={firm.partner} />
+                    <div style={{flex:1,minWidth:180}}>
+                      <div style={{fontWeight:700,fontSize:13,marginBottom:2,fontFamily:'Georgia,serif'}}>{firm.firm}</div>
+                      <div style={{fontSize:12,color:'var(--mut)',marginBottom:3,fontFamily:'sans-serif'}}>{firm.partner} · <span style={{color:'var(--acc)'}}>{firm.email}</span></div>
+                      <div style={{fontSize:11,color:'var(--mut)',fontFamily:'sans-serif'}}>{firm.city}, {firm.country} · {firm.practiceArea} · {firm.size}</div>
+                      {firm.emailSentDate && <div style={{fontSize:10,color:'var(--mut)',marginTop:3,fontFamily:'sans-serif'}}>Sent: {firm.emailSentDate}</div>}
+                      {firm.notes && <div style={{fontSize:11,marginTop:6,padding:'6px 9px',background:'var(--surf2)',borderRadius:6,borderLeft:'2px solid var(--bord)',fontFamily:'Georgia,serif',fontStyle:'italic',lineHeight:1.5}}>{firm.notes}</div>}
+                    </div>
+                    <div style={{display:'flex',flexDirection:'column',gap:5,alignItems:'flex-end',flexShrink:0}}>
+                      <Badge status={firm.status} />
+                      <select value={firm.status} onChange={e => updateField(firm.id,'status',e.target.value)} style={{fontSize:11,padding:'4px 7px',borderRadius:6,border:'0.5px solid var(--bord)',background:'var(--surf)',color:'var(--mut)',cursor:'pointer',fontFamily:'sans-serif'}}>
+                        {Object.keys(STATUS_META).map(s => <option key={s}>{s}</option>)}
+                      </select>
+                      <button onClick={() => setNotesModal({...firm})} style={{fontSize:11,padding:'3px 7px',borderRadius:6,border:'0.5px solid var(--bord)',background:'transparent',cursor:'pointer',color:'var(--mut)',fontFamily:'sans-serif',display:'flex',alignItems:'center',gap:3}}>
+                        <i className="ti ti-edit" style={{fontSize:11}}></i>Notes
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── EMAIL PREVIEW MODAL ── */}
+      {previewModal && (
+        <div onClick={() => setPreviewModal(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:16}}>
+          <div onClick={e => e.stopPropagation()} style={{background:'var(--surf)',borderRadius:R,maxWidth:620,width:'100%',maxHeight:'88vh',overflow:'auto'}}>
+            <div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--bord)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:14,fontFamily:'Georgia,serif'}}>{previewModal.firm}</div>
+                <div style={{fontSize:11,color:'var(--mut)',fontFamily:'sans-serif'}}>To: {previewModal.partner} &lt;{previewModal.email}&gt;</div>
+              </div>
+              <button onClick={() => setPreviewModal(null)} style={{background:'transparent',border:'none',cursor:'pointer',fontSize:22,color:'var(--mut)',lineHeight:1}}>×</button>
+            </div>
+            <div style={{padding:'18px 20px'}}>
+              <div style={{fontFamily:'Georgia,serif',fontSize:13,lineHeight:1.85,whiteSpace:'pre-wrap',color:'var(--tx)'}}>{previewEmail(previewModal)}</div>
+            </div>
+            <div style={{padding:'12px 20px',borderTop:'0.5px solid var(--bord)',display:'flex',gap:8,justifyContent:'flex-end'}}>
+              <button onClick={() => setPreviewModal(null)} style={{padding:'7px 13px',borderRadius:7,border:'0.5px solid var(--bord)',background:'transparent',cursor:'pointer',fontSize:12,fontFamily:'sans-serif',color:'var(--tx)'}}>Close</button>
+              <button onClick={() => { markSent([previewModal.id]); setPreviewModal(null); }} style={{padding:'7px 14px',borderRadius:7,border:'none',background:'var(--navy)',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:500,fontFamily:'sans-serif',display:'flex',alignItems:'center',gap:5}}>
+                <i className="ti ti-check"></i>Mark as sent
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── NOTES MODAL ── */}
+      {notesModal && (
+        <div onClick={() => setNotesModal(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:16}}>
+          <div onClick={e => e.stopPropagation()} style={{background:'var(--surf)',borderRadius:R,maxWidth:440,width:'100%'}}>
+            <div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--bord)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div style={{fontWeight:700,fontSize:14,fontFamily:'Georgia,serif'}}>Notes — {notesModal.firm}</div>
+              <button onClick={() => setNotesModal(null)} style={{background:'transparent',border:'none',cursor:'pointer',fontSize:22,color:'var(--mut)'}}>×</button>
+            </div>
+            <div style={{padding:'16px 20px'}}>
+              <textarea id="notesTxt" defaultValue={notesModal.notes} placeholder="Record conversation details, follow-up actions, contact notes..." style={{width:'100%',height:150,padding:'10px',borderRadius:7,border:'0.5px solid var(--bord)',fontSize:12,lineHeight:1.65,resize:'vertical',fontFamily:'Georgia,serif',background:'var(--surf)',color:'var(--tx)'}} />
+            </div>
+            <div style={{padding:'10px 20px',borderTop:'0.5px solid var(--bord)',display:'flex',gap:8,justifyContent:'flex-end'}}>
+              <button onClick={() => setNotesModal(null)} style={{padding:'7px 12px',borderRadius:7,border:'0.5px solid var(--bord)',background:'transparent',cursor:'pointer',fontSize:12,fontFamily:'sans-serif',color:'var(--tx)'}}>Cancel</button>
+              <button onClick={() => { updateField(notesModal.id,'notes',document.getElementById('notesTxt').value); setNotesModal(null); showToast('Notes saved'); }} style={{padding:'7px 14px',borderRadius:7,border:'none',background:'var(--navy)',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:500,fontFamily:'sans-serif'}}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
